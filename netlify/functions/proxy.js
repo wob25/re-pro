@@ -24,11 +24,6 @@ exports.handler = async function (event, context) {
 
     const targetUrl = new URL(targetUrlString);
 
-    // =======================================================
-    // 移除了域名白名单校验，允许代理任何网站
-    // 警告：这会带来安全风险，请确保您了解相关后果
-    // =======================================================
-    
     // 3. 发起代理请求
     const response = await fetch(targetUrl.toString(), {
       method: event.httpMethod,
