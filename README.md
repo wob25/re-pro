@@ -14,7 +14,7 @@
 `re-pro` 是一个轻量级反向代理服务，可加速访问 Notion、Unsplash 等图床资源，解决中国大陆的加载缓慢与跨域失败问题。
 
 ⚠️ **不推荐使用 Vercel 部署**，其网络策略限制常导致图片加载失败。  
-👉 若你需要完全开放代理反代任意网站，请查看：[完全开放版分支](https://github.com/wob26/re-pro/tree/re-pro_completely-open)
+👉 若你需要完全开放代理反代任意网站，请查看：[完全开放版分支](https://github.com/wob25/re-pro/tree/re-pro_completely-open)
 
 ---
 
@@ -125,6 +125,6 @@ re-pro/
 
 ## 📄 License
 
-[MIT](./LICENSE) © [wob25](https://github.com/wob26)
+[MIT](./LICENSE) © [wob25](https://github.com/wob25)
 
 > 本项目仅供个人或受控环境使用，部署使用请确保了解可能带来的网络风险与平台责任。
