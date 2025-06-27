@@ -1,19 +1,11 @@
-// 引入 node-fetch，它在 Netlify 的 Node.js 环境中表现更稳定
 const fetch = require('node-fetch');
-
-// 白名单域名（可以在这里修改添加想要反代的域名）
-const ALLOWED_DOMAINS = [
-  'notion.so',
-  'www.notion.so',
-  'file.notion.so',
-  'images.unsplash.com',
-];
 
 // Netlify 函数的标准写法
 exports.handler = async function (event, context) {
   try {
     // 1. 从请求路径中解析出目标 URL
     let targetUrlString = event.path.substring('/proxy/'.length);
+    // 拼接上原始的查询参数
     if (event.rawQuery) {
         targetUrlString += `?${event.rawQuery}`;
     }
@@ -22,7 +14,7 @@ exports.handler = async function (event, context) {
       return { statusCode: 400, body: '❌ 请求中缺少目标 URL' };
     }
 
-    // 2. 解码并修正 URL
+    // 2. 解码并修正 URL，以防万一
     targetUrlString = decodeURIComponent(targetUrlString);
     if (targetUrlString.startsWith('https:/') && !targetUrlString.startsWith('https://')) {
         targetUrlString = 'https://' + targetUrlString.substring('https:/'.length);
@@ -32,27 +24,18 @@ exports.handler = async function (event, context) {
 
     const targetUrl = new URL(targetUrlString);
 
-    // 3. 校验域名
-    if (!ALLOWED_DOMAINS.some(domain => targetUrl.hostname.endsWith(domain))) {
-      return { statusCode: 403, body: `⛔️ 不允许代理该域名：${targetUrl.hostname}` };
-    }
+    // =======================================================
+    // 移除了域名白名单校验，允许代理任何网站
+    // 警告：这会带来安全风险，请确保您了解相关后果
+    // =======================================================
     
-    // 4. --- 这是最关键的修改 ---
-    // 创建一个新的 Headers 对象，只转发必要的头信息
-    const headers = {};
-    const requiredHeaders = ['user-agent', 'accept', 'accept-language', 'accept-encoding'];
-    requiredHeaders.forEach(h => {
-        if(event.headers[h]) headers[h] = event.headers[h];
-    });
-
-
-    // 5. 发起代理请求
+    // 3. 发起代理请求
     const response = await fetch(targetUrl.toString(), {
       method: event.httpMethod,
-      headers: headers, // 使用清理过的请求头
+      headers: { ...event.headers, host: targetUrl.host }, // 转发头信息，并修正 host
     });
 
-    // 如果对 Notion 的请求失败，则提前返回错误
+    // 如果对目标服务器的请求失败，则提前返回错误
     if (!response.ok) {
         return {
             statusCode: response.status,
@@ -60,18 +43,17 @@ exports.handler = async function (event, context) {
         };
     }
 
-    // 6. 处理响应 - 修正了头信息处理
+    // 4. 将图片等二进制文件转换为 Base64 编码返回
     const buffer = await response.arrayBuffer();
     
     return {
-      statusCode: 200,
+      statusCode: response.status,
       headers: {
-        // 关键：从成功的响应中获取 Content-Type，并设置一个备用值
         'Content-Type': response.headers.get('Content-Type') || 'application/octet-stream',
-        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Origin': '*', // 允许跨域
       },
       body: Buffer.from(buffer).toString('base64'),
-      isBase64Encoded: true,
+      isBase64Encoded: true, // 告诉 Netlify, body 是 Base64 编码
     };
 
   } catch (err) {
