@@ -1,54 +1,59 @@
 const fetch = require('node-fetch');
 
-// Netlify 函数的标准写法
-exports.handler = async function (event, context) {
+exports.handler = async function (event) {
   try {
-    // 1. 从请求路径中解析出目标 URL
     let targetUrlString = event.path.substring('/proxy/'.length);
-    // 拼接上原始的查询参数
     if (event.rawQuery) {
-        targetUrlString += `?${event.rawQuery}`;
+      targetUrlString += `?${event.rawQuery}`;
     }
-
     if (!targetUrlString) {
       return { statusCode: 400, body: '❌ 请求中缺少目标 URL' };
     }
 
-    // 2. 解码并修正 URL，以防万一
     targetUrlString = decodeURIComponent(targetUrlString);
     if (targetUrlString.startsWith('https:/') && !targetUrlString.startsWith('https://')) {
-        targetUrlString = 'https://' + targetUrlString.substring('https:/'.length);
+      targetUrlString = 'https://' + targetUrlString.substring('https:/'.length);
     } else if (!targetUrlString.startsWith('http')) {
-        targetUrlString = 'https://' + targetUrlString;
+      targetUrlString = 'https://' + targetUrlString;
     }
 
     const targetUrl = new URL(targetUrlString);
 
-    // 3. 发起代理请求
     const response = await fetch(targetUrl.toString(), {
       method: event.httpMethod,
-      headers: { ...event.headers, host: targetUrl.host }, // 转发头信息，并修正 host
+      headers: { ...event.headers, host: targetUrl.host }
     });
 
-    // 如果对目标服务器的请求失败，则提前返回错误
-    if (!response.ok) {
-        return {
-            statusCode: response.status,
-            body: `上游服务器错误: ${response.statusText}`
-        };
+    const contentType = response.headers.get('Content-Type') || '';
+    const originalBody = await response.buffer();
+    let bodyToReturn = originalBody;
+    let encoding = 'base64'; // 默认返回 Base64
+
+    // 👉 如果是 HTML，就尝试重写资源路径
+    if (contentType.includes('text/html')) {
+      const text = originalBody.toString('utf-8');
+      const base = targetUrl.origin;
+      const proxy = '/proxy/';
+
+      const rewritten = text
+        .replace(/(href|src)=["'](\/[^"'>]+)["']/g, (_, attr, path) => {
+          const full = `${proxy}${base}${path}`;
+          return `${attr}="${full}"`;
+        });
+
+      bodyToReturn = Buffer.from(rewritten, 'utf-8');
+      encoding = 'utf-8'; // 返回纯文本
     }
 
-    // 4. 将图片等二进制文件转换为 Base64 编码返回
-    const buffer = await response.arrayBuffer();
-    
     return {
       statusCode: response.status,
       headers: {
-        'Content-Type': response.headers.get('Content-Type') || 'application/octet-stream',
-        'Access-Control-Allow-Origin': '*', // 允许跨域
+        'Content-Type': contentType,
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': '*'
       },
-      body: Buffer.from(buffer).toString('base64'),
-      isBase64Encoded: true, // 告诉 Netlify, body 是 Base64 编码
+      body: encoding === 'utf-8' ? bodyToReturn.toString('utf-8') : bodyToReturn.toString('base64'),
+      isBase64Encoded: encoding === 'base64'
     };
 
   } catch (err) {
