@@ -1,5 +1,3 @@
-// 结合了两者优点的版本
-
 addEventListener('fetch', event => {
   event.respondWith(handleRequest(event.request))
 })
